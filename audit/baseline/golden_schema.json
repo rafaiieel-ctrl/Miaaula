@@ -1,0 +1,20 @@
+
+{
+  "version": "1.0",
+  "required_entities": ["cards", "questions", "flashcards", "settings"],
+  "contracts": {
+    "question": {
+      "required_fields": ["id", "lawRef", "questionText", "correctAnswer", "options"],
+      "banned_id_prefixes": ["temp_", "new_", "undefined"],
+      "min_options_count": 2
+    },
+    "card": {
+      "required_fields": ["id", "lawId", "phase1Full"],
+      "id_format_regex": "^[A-Z0-9_]+$"
+    }
+  },
+  "tolerances": {
+    "max_orphaned_percentage": 5,
+    "max_duplicate_ids": 0
+  }
+}

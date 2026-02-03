@@ -1,0 +1,22 @@
+
+{
+  "short_name": "Miaaula",
+  "name": "Miaaula - Revisão Inteligente",
+  "id": "/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "orientation": "portrait",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "./vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "description": "Estude suas questões de concurso offline no seu celular com repetição espaçada."
+}
