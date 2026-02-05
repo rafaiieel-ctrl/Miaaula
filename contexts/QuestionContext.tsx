@@ -247,8 +247,17 @@ export const QuestionProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const deleteQuestions = useCallback((ids: string[]) => {
     const idsSet = new Set(ids.map(id => srs.getCanonicalId(id)));
-    traceService.trace('QUESTION_DELETE', 'QUESTIONS', undefined, { count: ids.length });
-    setQuestions(prev => prev.filter(q => !idsSet.has(srs.getCanonicalId(q.id))));
+    const now = new Date().toISOString();
+    
+    traceService.trace('QUESTION_DELETE', 'QUESTIONS', undefined, { count: ids.length, type: 'SOFT_DELETE' });
+    
+    // SOFT DELETE: Mark as deleted instead of removing from array
+    setQuestions(prev => prev.map(q => {
+        if (idsSet.has(srs.getCanonicalId(q.id))) {
+            return { ...q, deletedAt: now };
+        }
+        return q;
+    }));
   }, []);
 
   const resetAllProgress = useCallback((settings: AppSettings) => {
@@ -337,8 +346,11 @@ export const QuestionProvider: React.FC<{ children: ReactNode }> = ({ children }
     addQuestion, updateQuestion, updateBatchQuestions, deleteQuestions, resetAllProgress, addBatchQuestions, removeDuplicates, registerAttempt
   }), [addQuestion, updateQuestion, updateBatchQuestions, deleteQuestions, resetAllProgress, addBatchQuestions, removeDuplicates, registerAttempt]);
 
+  // Filter out soft-deleted questions for consumers
+  const visibleQuestions = useMemo(() => questions.filter(q => !q.deletedAt), [questions]);
+
   return (
-    <QuestionStateContext.Provider value={questions}>
+    <QuestionStateContext.Provider value={visibleQuestions}>
         <QuestionDispatchContext.Provider value={dispatchValue}>
             {children}
         </QuestionDispatchContext.Provider>
@@ -357,3 +369,4 @@ export const useQuestionDispatch = () => {
   if (context === undefined) throw new Error('useQuestionDispatch error');
   return context;
 };
+    

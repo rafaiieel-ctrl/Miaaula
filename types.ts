@@ -100,6 +100,9 @@ export interface Question {
     createdAt?: string;
     studyRefs?: StudyRef[];
     lapses?: number;
+    
+    // Soft Delete
+    deletedAt?: string;
 }
 
 export interface Flashcard {
@@ -937,3 +940,4 @@ export interface SystemLog {
     message: string;
     details?: string;
 }
+    
