@@ -1,10 +1,9 @@
 
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { TabID } from '../types';
-import { DownloadIcon, SidebarOpenIcon, SidebarCloseIcon, Bars3Icon, RadarIcon, LockClosedIcon } from './icons';
+import { DownloadIcon, SidebarOpenIcon, SidebarCloseIcon, Bars3Icon } from './icons';
 import { useSettings } from '../contexts/SettingsContext';
 import * as srs from '../services/srsService';
-import TrapscanMenu from './TrapscanMenu';
 
 interface HeaderProps {
   activeTabInfo: { id: TabID; label: string; icon: React.ReactNode };
@@ -29,29 +28,6 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const { settings } = useSettings();
   const { level, progressPercent } = srs.getLevelInfo(settings.userXp);
-  
-  // Trapscan UI Logic
-  const [isTrapscanOpen, setIsTrapscanOpen] = useState(false);
-  const trapscanBtnRef = useRef<HTMLButtonElement>(null);
-  
-  // Identify if current view supports Trapscan Assist
-  // It should be disabled in 'porrada' (Arena), 'battle' and 'pair-match' (Games)
-  const isGameMode = ['porrada', 'battle', 'pair-match'].includes(activeTabInfo.id);
-  
-  const tsConfig = settings.trapscan || { enabled: true, assistMode: true, defaultMode: 'TREINO', lockLevel: 'SOFT' };
-  
-  const getTrapscanStatus = () => {
-      if (isGameMode) return { label: 'INDISPONÍVEL', color: 'text-slate-600', bg: 'bg-slate-800/50' };
-      if (!tsConfig.assistMode) return { label: 'OFF', color: 'text-slate-500', bg: 'bg-white/5' };
-      if (tsConfig.defaultMode === 'GUIA') return { label: 'GUIA', color: 'text-sky-400', bg: 'bg-sky-500/10 border-sky-500/30' };
-      return { 
-          label: tsConfig.lockLevel === 'HARD' ? 'HARD LOCK' : 'TREINO', 
-          color: tsConfig.lockLevel === 'HARD' ? 'text-rose-400' : 'text-indigo-400', 
-          bg: tsConfig.lockLevel === 'HARD' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-indigo-500/10 border-indigo-500/30' 
-      };
-  };
-
-  const tsStatus = getTrapscanStatus();
 
   return (
     <header className="sticky top-0 z-40 px-4 pt-4 pb-2 pointer-events-none">
@@ -83,25 +59,6 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Center: Global Trapscan Control */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-              <button
-                  ref={trapscanBtnRef}
-                  onClick={() => !isGameMode && setIsTrapscanOpen(!isTrapscanOpen)}
-                  disabled={isGameMode}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all active:scale-95 ${tsStatus.bg} ${isGameMode ? 'opacity-50 cursor-not-allowed border-transparent' : 'border border-white/5 hover:border-white/20 cursor-pointer shadow-sm'}`}
-                  title={isGameMode ? "Trapscan indisponível neste modo" : "Configurar Trapscan Assist"}
-              >
-                  <RadarIcon className={`w-3.5 h-3.5 ${tsStatus.color}`} />
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${tsStatus.color}`}>
-                      {tsStatus.label}
-                  </span>
-                  {tsConfig.defaultMode === 'TREINO' && !isGameMode && tsConfig.assistMode && (
-                      <LockClosedIcon className={`w-3 h-3 ${tsStatus.color} opacity-70`} />
-                  )}
-              </button>
-          </div>
-
           {/* Right Controls */}
           <div className="flex items-center gap-4">
             {/* Level XP Progress */}
@@ -123,12 +80,6 @@ const Header: React.FC<HeaderProps> = ({
                 <div className={`w-2.5 h-2.5 rounded-full border border-slate-900 ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} title={isOnline ? "Online" : "Offline"}></div>
             </div>
           </div>
-          
-          <TrapscanMenu 
-              isOpen={isTrapscanOpen} 
-              onClose={() => setIsTrapscanOpen(false)} 
-              anchorRect={trapscanBtnRef.current?.getBoundingClientRect()} 
-          />
       </div>
     </header>
   );

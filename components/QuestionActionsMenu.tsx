@@ -31,11 +31,10 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
     className = ""
 }) => {
     const { updateQuestion } = useQuestionDispatch();
-    const { updateSettings } = useSettings(); // Trigger re-renders if needed
+    const { updateSettings } = useSettings(); 
     const [isOpen, setIsOpen] = useState(false);
     const [isSaved, setIsSaved] = useState(studyLater.isStudyLater(question.id));
 
-    // REGRA DE NEGÓCIO: Se for contexto Literalness (Lei Seca), não renderiza nada.
     if (context === 'literalness') {
         return null;
     }
@@ -44,7 +43,6 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
         const newState = studyLater.toggleStudyLater(question.id);
         setIsSaved(newState);
         setIsOpen(false);
-        // Force update to ensure UI reflects change globally if needed
         updateSettings({}); 
     };
 
@@ -59,10 +57,9 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
     };
 
     const handleDelete = () => {
+        // A confirmação é feita no componente pai se onDelete for passado
         if (onDelete) {
-            if (window.confirm("Tem certeza que deseja excluir esta questão?")) {
-                onDelete(question.id);
-            }
+             onDelete(question.id);
         }
         setIsOpen(false);
     };
@@ -71,10 +68,10 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
         <div className={`relative ${className}`} onClick={e => e.stopPropagation()}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                className={`p-2.5 rounded-xl transition-all border ${isOpen ? 'bg-white/10 text-white border-white/10' : 'bg-transparent text-slate-500 border-transparent hover:bg-white/5 hover:text-white hover:border-white/5'}`}
                 title="Ações da Questão"
             >
-                <EllipsisHorizontalIcon className="w-6 h-6" />
+                <EllipsisHorizontalIcon className="w-5 h-5" />
             </button>
 
             {isOpen && (
@@ -83,42 +80,47 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
                         className="fixed inset-0 z-[50]" 
                         onClick={() => setIsOpen(false)} 
                     />
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-[60] overflow-hidden animate-fade-in py-1">
-                        <button 
-                            onClick={handleToggleSaveLater}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
-                        >
-                            {isSaved ? <BookmarkSolidIcon className="w-4 h-4 text-indigo-400" /> : <BookmarkIcon className="w-4 h-4" />}
-                            {isSaved ? 'Remover dos Salvos' : 'Ver Depois'}
-                        </button>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden animate-fade-in p-1.5">
                         
-                        <button 
-                            onClick={handleToggleCritical}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
-                        >
-                            <ExclamationTriangleIcon className={`w-4 h-4 ${question.isCritical ? 'text-amber-500' : ''}`} />
-                            {question.isCritical ? 'Desmarcar Crítica' : 'Marcar Crítica'}
-                        </button>
-
-                        {(onEdit || onDelete) && <div className="h-px bg-white/10 my-1"></div>}
-
-                        {onEdit && (
+                        <div className="space-y-1">
                             <button 
-                                onClick={handleEdit}
-                                className="w-full text-left px-4 py-3 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
+                                onClick={handleToggleSaveLater}
+                                className="w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-bold text-slate-300 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors uppercase tracking-wider"
                             >
-                                <PencilIcon className="w-4 h-4" /> Editar
+                                {isSaved ? <BookmarkSolidIcon className="w-4 h-4 text-indigo-400" /> : <BookmarkIcon className="w-4 h-4 text-slate-500" />}
+                                {isSaved ? 'Remover Salvo' : 'Ver Depois'}
                             </button>
-                        )}
-
-                        {onDelete && (
+                            
                             <button 
-                                onClick={handleDelete}
-                                className="w-full text-left px-4 py-3 text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 flex items-center gap-2"
+                                onClick={handleToggleCritical}
+                                className="w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-bold text-slate-300 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors uppercase tracking-wider"
                             >
-                                <TrashIcon className="w-4 h-4" /> Excluir
+                                <ExclamationTriangleIcon className={`w-4 h-4 ${question.isCritical ? 'text-amber-500' : 'text-slate-500'}`} />
+                                {question.isCritical ? 'Desmarcar Crítica' : 'Marcar Crítica'}
                             </button>
-                        )}
+                        </div>
+
+                        <div className="h-px bg-white/10 my-1.5 mx-2"></div>
+
+                        <div className="space-y-1">
+                            {onEdit && (
+                                <button 
+                                    onClick={handleEdit}
+                                    className="w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-bold text-sky-400 hover:text-white hover:bg-sky-500/20 flex items-center gap-3 transition-colors uppercase tracking-wider"
+                                >
+                                    <PencilIcon className="w-4 h-4" /> Editar Questão
+                                </button>
+                            )}
+
+                            {onDelete && (
+                                <button 
+                                    onClick={handleDelete}
+                                    className="w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-bold text-rose-500 hover:text-white hover:bg-rose-500/20 flex items-center gap-3 transition-colors uppercase tracking-wider"
+                                >
+                                    <TrashIcon className="w-4 h-4" /> Excluir Questão
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </>
             )}
@@ -127,3 +129,4 @@ const QuestionActionsMenu: React.FC<QuestionActionsMenuProps> = ({
 };
 
 export default QuestionActionsMenu;
+    

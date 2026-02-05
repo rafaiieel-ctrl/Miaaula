@@ -15,6 +15,9 @@ import QuestionActionsMenu, { QuestionContextType } from './QuestionActionsMenu'
 import ReadingContainer from './ui/ReadingContainer';
 import { getText } from '../utils/i18nText';
 import { isStrictQuestion } from '../services/contentGate'; // IMPORT GATE
+import ConfirmationModal from './ConfirmationModal'; // Added for delete confirmation
+import EditQuestionModal from './EditQuestionModal'; // Ensure Edit Modal is available internally or via prop
+import { useQuestionDispatch } from '../contexts/QuestionContext'; // For direct delete call if needed
 
 interface QuestionRunnerProps {
     question: Question;
@@ -58,6 +61,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     onDelete
 }) => {
     const { settings, updateSettings } = useSettings();
+    const { deleteQuestions } = useQuestionDispatch();
     const scrollRef = useRef<HTMLDivElement>(null);
     const startTimeRef = useRef<number>(Date.now());
 
@@ -78,6 +82,11 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         }
     }, [question.id, isInvalidContent, onNext]);
 
+    // Local state for delete confirmation
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    // Local state for edit modal if handler provided but wants internal handling (optional, mostly handled by parent via prop)
+    // We assume parent handles Edit via onEdit prop, but we handle Delete confirmation locally.
+
     if (isInvalidContent) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-10 text-center space-y-4">
@@ -94,15 +103,11 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     
     // Merge global settings with session config.
     const activeConfig = useMemo(() => {
-        const base = sessionConfig || settings.trapscan || { enabled: true, assistMode: true, defaultMode: 'TREINO', lockLevel: 'SOFT' };
-        
-        if (settings.trapscan) {
-            return {
-                ...base,
-                assistMode: settings.trapscan.assistMode // Always sync ON/OFF with global state
-            };
+        // Fix: Respect sessionConfig if provided (Preflight toggle)
+        if (sessionConfig) {
+            return sessionConfig;
         }
-        return base;
+        return settings.trapscan || { enabled: true, assistMode: true, defaultMode: 'TREINO', lockLevel: 'SOFT' };
     }, [sessionConfig, settings.trapscan]);
 
     // State
@@ -124,6 +129,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         setEliminatedOptions([]);
         setIsEliminationMode(false);
         setHighlightAnchor(false);
+        setIsDeleteConfirmOpen(false);
         startTimeRef.current = Date.now();
         
         // AUTO-SCROLL FIX: Scroll to top immediately when question changes
@@ -180,6 +186,23 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         updateSettings({ readerMode: newMode });
     };
 
+    const handleDeleteRequest = (id: string) => {
+        setIsDeleteConfirmOpen(true);
+    };
+
+    const handleConfirmDelete = () => {
+        // 1. Soft delete via Context
+        deleteQuestions([question.id]);
+        
+        // 2. Notify Parent to remove from active queue if needed
+        if (onDelete) onDelete(question.id);
+        
+        // 3. Move Next to avoid showing deleted question
+        if (onNext) onNext();
+        
+        setIsDeleteConfirmOpen(false);
+    };
+
     const showTrapscan = !isGap && trapscanLogic.isTrapscanActive(activeConfig) && !question.isGapType;
 
     return (
@@ -206,7 +229,13 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                         {settings.readerMode === 'compact' ? <FullScreenIcon className="w-5 h-5"/> : <ExitFullScreenIcon className="w-5 h-5"/>}
                     </button>
 
-                    <QuestionActionsMenu question={question} context={context} onEdit={onEdit} onDelete={onDelete} />
+                    <QuestionActionsMenu 
+                        question={question} 
+                        context={context} 
+                        onEdit={onEdit} 
+                        onDelete={handleDeleteRequest} 
+                    />
+                    
                     {onClose && (
                         <button onClick={onClose} className="p-2 -mr-2 text-[var(--q-muted)] hover:bg-[var(--q-hover)] transition-colors">
                             <XMarkIcon className="w-5 h-5"/>
@@ -305,6 +334,20 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                     </ReadingContainer>
                 </footer>
             )}
+
+            {/* DELETE CONFIRMATION MODAL */}
+            <ConfirmationModal 
+                isOpen={isDeleteConfirmOpen} 
+                onClose={() => setIsDeleteConfirmOpen(false)} 
+                onConfirm={handleConfirmDelete} 
+                title="Excluir Questão?"
+            >
+                <div className="space-y-2">
+                    <p className="text-sm text-slate-300">Tem certeza que deseja apagar esta questão? Ela será removida de todas as suas listas de estudo.</p>
+                    <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Ação irreversível.</p>
+                </div>
+            </ConfirmationModal>
+
         </div>
     );
 };

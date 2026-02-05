@@ -197,6 +197,28 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
   
   const handleConfirmExit = () => { setIsLeaveConfirmOpen(false); finalizeSession(false); };
   
+  // NEW: Edit Handler
+  const handleEdit = (q: Question) => {
+      setEditingQuestion(q);
+  };
+
+  // NEW: Delete Handler
+  const handleDelete = (id: string) => {
+      // Remove from current session queue
+      setSessionQueue(prev => prev.filter(q => q.id !== id));
+      
+      // Compensate for auto-advance in Runner (onNext is usually called after delete)
+      // If we are at index N and remove it, the next item slides into index N.
+      // But Runner calls onNext which increments index to N+1.
+      // So we decrement here to N-1, so onNext brings it back to N.
+      setCurrentIndex(prev => Math.max(0, prev - 1));
+      
+      // Check if session became empty
+      if (sessionQueue.length <= 1) {
+          onClose();
+      }
+  };
+
   if (!isOpen) return null;
 
   // Theme logic (omitted for brevity, same as before)
@@ -233,6 +255,8 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
                     context={context}
                     mode="SRS"
                     allowGaps={sessionType === 'gaps'} // Pass flag to Runner
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
                 />
             )}
 
