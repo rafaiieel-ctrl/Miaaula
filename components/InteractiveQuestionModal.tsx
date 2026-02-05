@@ -11,6 +11,7 @@ import { QuestionContextType } from './QuestionActionsMenu';
 import TrapscanPreflightModal from './TrapscanPreflightModal'; 
 import { useTrapscanPreflight } from '../hooks/useTrapscanPreflight';
 import QuestionRunner from './QuestionRunner'; // IMPORT RUNNER
+import EditQuestionModal from './EditQuestionModal';
 
 interface InteractiveQuestionModalProps {
     question: Question;
@@ -20,16 +21,17 @@ interface InteractiveQuestionModalProps {
 }
 
 const InteractiveQuestionModal: React.FC<InteractiveQuestionModalProps> = ({ question: initialQuestion, onClose, onQuestionAnswered, context = 'questions' }) => {
-    const { registerAttempt } = useQuestionDispatch();
+    const { registerAttempt, updateQuestion, deleteQuestions } = useQuestionDispatch();
     const { settings, addXp } = useSettings();
     
     // PREFLIGHT HOOK
     const { isPreflightOpen, sessionConfig, handleConfirmPreflight } = useTrapscanPreflight(settings);
 
     // State
-    const [question] = useState<Question>(initialQuestion);
+    const [question, setQuestion] = useState<Question>(initialQuestion);
     const [reportingQuestionAfterAnswer, setReportingQuestionAfterAnswer] = useState<Question | null>(null);
     const [masteryBefore, setMasteryBefore] = useState<number>(0);
+    const [isEditing, setIsEditing] = useState(false);
 
     const handleRunnerResult = (rating: 'again' | 'hard' | 'good' | 'easy', timeTaken: number, trapscanData?: TrapscanEntry) => {
         let isCorrectNow = true;
@@ -97,6 +99,24 @@ const InteractiveQuestionModal: React.FC<InteractiveQuestionModalProps> = ({ que
         }
     };
 
+    const handleEdit = (q: Question) => {
+        setIsEditing(true);
+    };
+
+    const handleDelete = (id: string) => {
+        // Confirmation is already handled in QuestionActionsMenu if used there,
+        // but here we are providing the callback. 
+        // QuestionActionsMenu will call this if confirmed.
+        deleteQuestions([id]);
+        onClose();
+    };
+
+    const handleSaveEdit = (updatedQ: Question) => {
+        updateQuestion(updatedQ);
+        setQuestion(updatedQ);
+        setIsEditing(false);
+    };
+
     // Theme
     const isDark = settings.appTheme === 'dark' || settings.appTheme === 'galaxy';
     const themeStyles = (isDark ? {
@@ -132,12 +152,12 @@ const InteractiveQuestionModal: React.FC<InteractiveQuestionModalProps> = ({ que
             
             {/* PREFLIGHT INTERCEPTOR */}
             <TrapscanPreflightModal 
-                isOpen={isPreflightOpen && !reportingQuestionAfterAnswer} 
+                isOpen={isPreflightOpen && !reportingQuestionAfterAnswer && !isEditing} 
                 onConfirm={handleConfirmPreflight}
                 onCancel={() => { /* User cancelled preflight */ }}
             />
 
-            <div className={`fixed inset-0 z-[9999] flex flex-col bg-black/80 backdrop-blur-sm items-center justify-center md:p-4 transition-opacity duration-300 ${isPreflightOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} onClick={onClose}>
+            <div className={`fixed inset-0 z-[9999] flex flex-col bg-black/80 backdrop-blur-sm items-center justify-center md:p-4 transition-opacity duration-300 ${isPreflightOpen && !isEditing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} onClick={onClose}>
                 <div 
                     className="bg-[var(--q-surface)] text-[var(--q-text)] w-full h-[100dvh] md:h-[90vh] md:max-w-2xl md:rounded-3xl shadow-2xl border border-[var(--q-border)] flex flex-col overflow-hidden transition-all duration-300"
                     onClick={e => e.stopPropagation()}
@@ -151,6 +171,8 @@ const InteractiveQuestionModal: React.FC<InteractiveQuestionModalProps> = ({ que
                         onClose={onClose}
                         context={context}
                         mode="SRS"
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
                     />
 
                     {reportingQuestionAfterAnswer && (
@@ -164,6 +186,14 @@ const InteractiveQuestionModal: React.FC<InteractiveQuestionModalProps> = ({ que
                     )}
                 </div>
             </div>
+
+            {isEditing && (
+                <EditQuestionModal
+                    question={question}
+                    onClose={() => setIsEditing(false)}
+                    onSave={handleSaveEdit}
+                />
+            )}
         </div>,
         document.body
     );

@@ -26,6 +26,8 @@ interface QuestionRunnerProps {
     context: QuestionContextType;
     mode?: 'SRS' | 'SIMPLE'; // SRS shows 4 buttons, SIMPLE shows Next/Finish
     allowGaps?: boolean; // NEW: Allow running Gap type items
+    onEdit?: (q: Question) => void;
+    onDelete?: (id: string) => void;
 }
 
 const MediaBlock: React.FC<{ image?: string, audio?: string }> = ({ image, audio }) => {
@@ -51,7 +53,9 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     onClose, 
     context,
     mode = 'SRS',
-    allowGaps = false
+    allowGaps = false,
+    onEdit,
+    onDelete
 }) => {
     const { settings, updateSettings } = useSettings();
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -202,7 +206,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                         {settings.readerMode === 'compact' ? <FullScreenIcon className="w-5 h-5"/> : <ExitFullScreenIcon className="w-5 h-5"/>}
                     </button>
 
-                    <QuestionActionsMenu question={question} context={context} />
+                    <QuestionActionsMenu question={question} context={context} onEdit={onEdit} onDelete={onDelete} />
                     {onClose && (
                         <button onClick={onClose} className="p-2 -mr-2 text-[var(--q-muted)] hover:bg-[var(--q-hover)] transition-colors">
                             <XMarkIcon className="w-5 h-5"/>
