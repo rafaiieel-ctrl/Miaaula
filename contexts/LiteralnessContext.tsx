@@ -121,6 +121,13 @@ export const LiteralnessProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCards(prev => prev.map(c => c.id === card.id ? card : c));
     }, []);
 
+    const moveCardToLaw = useCallback(async (cardId: string, newLawId: string) => {
+        const card = cards.find(c => c.id === cardId);
+        if (!card) return;
+        const updated = { ...card, lawId: newLawId };
+        await updateCard(updated);
+    }, [cards, updateCard]);
+
     const deleteCards = useCallback(async (ids: string[]) => {
         for (const id of ids) {
             await storage.dbDelete(storage.STORES.NUCLEUS, id);
@@ -128,7 +135,7 @@ export const LiteralnessProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCards(prev => prev.filter(c => !ids.includes(c.id)));
     }, []);
 
-    const dispatch = useMemo(() => ({ addBatchCards, updateCard, deleteCards }), [addBatchCards, updateCard, deleteCards]);
+    const dispatch = useMemo(() => ({ addBatchCards, updateCard, deleteCards, moveCardToLaw }), [addBatchCards, updateCard, deleteCards, moveCardToLaw]);
 
     return (
         <LiteralnessStateContext.Provider value={cards}>
