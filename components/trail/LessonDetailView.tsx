@@ -4,8 +4,9 @@ import { LessonNode, GameResult, Flashcard, Question } from '../../types';
 import { useTrailDispatch } from '../../contexts/TrailContext';
 import { useQuestionState, useQuestionDispatch } from '../../contexts/QuestionContext';
 import { useFlashcardState, useFlashcardDispatch } from '../../contexts/FlashcardContext';
+import { useLiteralnessState } from '../../contexts/LiteralnessContext'; // Added
 import { useSettings } from '../../contexts/SettingsContext';
-import { ChevronLeftIcon, ChevronRightIcon, BrainIcon, ClipboardDocumentCheckIcon, BookOpenIcon, ChartBarIcon, PencilIcon, TrashIcon, PlusIcon, ListBulletIcon, XMarkIcon, SearchIcon, CheckCircleIcon, TagIcon, PuzzlePieceIcon, BoltIcon } from '../icons'; // Added BoltIcon
+import { ChevronLeftIcon, ChevronRightIcon, BrainIcon, ClipboardDocumentCheckIcon, BookOpenIcon, ChartBarIcon, PencilIcon, TrashIcon, PlusIcon, ListBulletIcon, XMarkIcon, SearchIcon, CheckCircleIcon, TagIcon, PuzzlePieceIcon, BoltIcon, MapIcon } from '../icons'; // Added MapIcon
 import StudySessionModal from '../StudySessionModal';
 import FlashcardStudySessionModal from '../FlashcardStudySessionModal';
 import EditQuestionModal from '../EditQuestionModal';
@@ -183,6 +184,7 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
 
     const allQuestions = useQuestionState();
     const allFlashcards = useFlashcardState();
+    const allCards = useLiteralnessState(); // Need cards to find attached gaps
     
     // --- SIDEBAR OFFSET LOGIC ---
     useEffect(() => {
@@ -211,6 +213,7 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
         }
     }, []);
 
+    // 1. Filter Questions (Strict)
     const lessonQuestions = useMemo(() => {
         const refs = lesson.questionRefs || [];
         return allQuestions.filter(q => 
@@ -219,6 +222,38 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
         );
     }, [allQuestions, lesson]);
 
+    // 2. Filter Gaps (Loose + Card Associated)
+    const lessonGaps = useMemo(() => {
+        const refs = lesson.questionRefs || [];
+        
+        // Strategy A: Gaps stored as "Questions" in global state
+        const looseGaps = allQuestions.filter(q => 
+            (refs.includes(q.id) || q.topic === lesson.title) &&
+            (q.isGapType || q.questionText.includes('{{'))
+        );
+        
+        // Strategy B: Gaps attached to a Nucleus Card matching this lesson
+        // (If Lesson was created from Lei Seca import, id often matches)
+        const nucleus = allCards.find(c => c.id === lesson.id || c.id === lesson.code);
+        let cardGaps: any[] = [];
+        if (nucleus) {
+             cardGaps = srs.getGapsForCard(nucleus, allQuestions);
+        }
+
+        // Deduplicate by ID
+        const combined = [...looseGaps, ...cardGaps];
+        const unique = new Map();
+        combined.forEach(g => unique.set(g.id, g));
+        return Array.from(unique.values()).map(g => ({
+             ...g,
+             // Ensure minimally compatible Question structure for Runner
+             questionText: g.questionText || g.text || "Sem texto",
+             correctAnswer: g.correctAnswer || g.correct || "A",
+             isGapType: true
+        })) as Question[];
+    }, [allQuestions, allCards, lesson]);
+
+    // 3. Filter Flashcards
     const lessonFlashcards = useMemo(() => {
         const refs = lesson.flashcardRefs || [];
         // Robust filtering: check refs AND lesson linkage via tags/topic
@@ -243,6 +278,7 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
 
     // --- ACTIVITY STATES ---
     const [questionSession, setQuestionSession] = useState(false);
+    const [gapSession, setGapSession] = useState(false); // NEW
     const [flashcardSession, setFlashcardSession] = useState(false);
     const [pairSession, setPairSession] = useState(false); 
     const [lightningSession, setLightningSession] = useState(false);
@@ -251,6 +287,10 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
     const [retryQuestions, setRetryQuestions] = useState<Question[]>([]);
 
     const handleFinishQuestions = () => {
+        syncLessonState(lesson.id, allQuestions, allFlashcards, settings);
+    };
+
+    const handleFinishGaps = () => {
         syncLessonState(lesson.id, allQuestions, allFlashcards, settings);
     };
 
@@ -335,12 +375,20 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
         }
     };
 
+    // Calculate Available Counts for UI
+    const availableQuestionsCount = lessonQuestions.filter(q => q.totalAttempts === 0 || new Date(q.nextReviewDate) <= new Date()).length;
+    const availableGapsCount = lessonGaps.filter(q => q.totalAttempts === 0 || new Date(q.nextReviewDate) <= new Date()).length;
+    const availableFlashcardsCount = lessonStudyCards.filter(f => f.totalAttempts === 0 || new Date(f.nextReviewDate) <= new Date()).length;
+    
+    // Always enable if count > 0, otherwise let user review all if they want (optional, but requested behavior says "disabled if 0")
+    // Let's enable review if total > 0 but show "0 pendentes" if all done.
+
     return (
         <div 
             className="fixed inset-y-0 right-0 z-[40] flex flex-col bg-[#020617] text-slate-100 font-sans select-none overflow-hidden transition-[left] duration-200"
             style={{ left: sidebarOffset }}
         >
-            {/* 1. NEW HEADER (Clean & Dense) */}
+            {/* 1. HEADER */}
             <header className="shrink-0 px-6 py-4 flex items-start justify-between gap-4 border-b border-white/5 bg-slate-900/80 backdrop-blur-xl z-30">
                 <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-3">
@@ -376,7 +424,7 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                 <div className="mx-auto w-full max-w-6xl px-6 py-6 space-y-8">
                     
-                    {/* TABS (Modern Style) */}
+                    {/* TABS */}
                     <div className="flex flex-wrap gap-2 border-b border-white/5 pb-1">
                         {[
                             { id: 'summary', label: 'Visão Geral' },
@@ -452,21 +500,80 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
 
                     {activeTab === 'practice' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
-                            {[
-                                { id: 'q', icon: BrainIcon, title: 'Bateria de Questões', desc: `${lessonQuestions.length} disponíveis`, count: lessonQuestions.length, color: 'text-sky-400', action: () => { setRetryQuestions([]); setQuestionSession(true); } },
-                                { id: 'fc', icon: ClipboardDocumentCheckIcon, title: 'Revisar Flashcards', desc: `${lessonStudyCards.length} disponíveis`, count: lessonStudyCards.length, color: 'text-teal-400', action: () => setFlashcardSession(true) },
-                                { id: 'pairs', icon: PuzzlePieceIcon, title: 'Pares (Match)', desc: `${lessonPairs.length} pares disponíveis`, count: lessonPairs.length, color: 'text-violet-400', action: () => setPairSession(true) },
-                                // NEW: Lightning Card
-                                { id: 'lightning', icon: BoltIcon, title: 'Minuto de Porrada', desc: `${lessonQuestions.length} itens disponíveis`, count: lessonQuestions.length, color: 'text-orange-400', action: handleStartLightning },
-                            ].map(box => (
-                                <button key={box.id} onClick={box.action} disabled={box.count === 0} className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg">
-                                    <div className={`mb-4 p-3 rounded-xl bg-black/30 ${box.color} group-hover:scale-110 transition-transform`}>
-                                        <box.icon className="w-6 h-6" />
+                            {/* Questions */}
+                            <button 
+                                onClick={() => { setRetryQuestions([]); setQuestionSession(true); }} 
+                                disabled={lessonQuestions.length === 0} 
+                                className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg"
+                            >
+                                <div className="mb-4 p-3 rounded-xl bg-black/30 text-sky-400 group-hover:scale-110 transition-transform">
+                                    <BrainIcon className="w-6 h-6" />
+                                </div>
+                                <span className="text-lg font-bold text-white tracking-tight">Bateria de Questões</span>
+                                <span className="text-xs font-bold text-white/50 uppercase tracking-widest mt-1">
+                                    {availableQuestionsCount > 0 ? `${availableQuestionsCount} pendentes` : `${lessonQuestions.length} total`}
+                                </span>
+                            </button>
+
+                            {/* Gaps (New) */}
+                            <button 
+                                onClick={() => setGapSession(true)} 
+                                disabled={lessonGaps.length === 0} 
+                                className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg"
+                            >
+                                <div className="mb-4 p-3 rounded-xl bg-black/30 text-amber-400 group-hover:scale-110 transition-transform">
+                                    <MapIcon className="w-6 h-6" />
+                                </div>
+                                <span className="text-lg font-bold text-white tracking-tight">Lacunas (Cloze)</span>
+                                <span className="text-xs font-bold text-white/50 uppercase tracking-widest mt-1">
+                                    {availableGapsCount > 0 ? `${availableGapsCount} disponíveis` : `${lessonGaps.length} total`}
+                                </span>
+                            </button>
+
+                            {/* Flashcards */}
+                            <button 
+                                onClick={() => setFlashcardSession(true)} 
+                                disabled={lessonStudyCards.length === 0} 
+                                className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg"
+                            >
+                                <div className="mb-4 p-3 rounded-xl bg-black/30 text-teal-400 group-hover:scale-110 transition-transform">
+                                    <ClipboardDocumentCheckIcon className="w-6 h-6" />
+                                </div>
+                                <span className="text-lg font-bold text-white tracking-tight">Revisar Flashcards</span>
+                                <span className="text-xs font-bold text-white/50 uppercase tracking-widest mt-1">
+                                    {availableFlashcardsCount > 0 ? `${availableFlashcardsCount} pendentes` : `${lessonStudyCards.length} total`}
+                                </span>
+                            </button>
+
+                            {/* Pairs */}
+                            <button 
+                                onClick={() => setPairSession(true)} 
+                                disabled={lessonPairs.length < 2} 
+                                className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg"
+                            >
+                                <div className="mb-4 p-3 rounded-xl bg-black/30 text-violet-400 group-hover:scale-110 transition-transform">
+                                    <PuzzlePieceIcon className="w-6 h-6" />
+                                </div>
+                                <span className="text-lg font-bold text-white tracking-tight">Pares (Match)</span>
+                                <span className="text-xs font-bold text-white/50 uppercase tracking-widest mt-1">{lessonPairs.length} pares</span>
+                            </button>
+
+                            {/* Lightning */}
+                            <button 
+                                onClick={handleStartLightning} 
+                                disabled={lessonQuestions.length === 0} 
+                                className="flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-30 active:scale-95 group text-left shadow-lg lg:col-span-4"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-xl bg-black/30 text-orange-400 group-hover:scale-110 transition-transform">
+                                        <BoltIcon className="w-6 h-6" />
                                     </div>
-                                    <span className="text-lg font-bold text-white tracking-tight">{box.title}</span>
-                                    <span className="text-xs font-bold text-white/50 uppercase tracking-widest mt-1">{box.desc}</span>
-                                </button>
-                            ))}
+                                    <div>
+                                        <span className="text-lg font-bold text-white tracking-tight block">Minuto de Porrada</span>
+                                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Treino de Velocidade ({lessonQuestions.length} itens)</span>
+                                    </div>
+                                </div>
+                            </button>
                         </div>
                     )}
 
@@ -523,6 +630,18 @@ const LessonDetailView: React.FC<LessonDetailViewProps> = ({ lesson, onBack }) =
                 questions={retryQuestions.length > 0 ? retryQuestions : lessonQuestions} 
                 onSessionFinished={handleFinishQuestions} 
                 lessonId={lesson.id}
+                sessionType="questions"
+            />
+            
+            {/* NEW: GAP SESSION MODAL */}
+            <StudySessionModal 
+                isOpen={gapSession} 
+                onClose={() => setGapSession(false)} 
+                title={`Lacunas: ${lesson.code}`} 
+                questions={lessonGaps} 
+                onSessionFinished={handleFinishGaps} 
+                lessonId={lesson.id}
+                sessionType="gaps"
             />
             
             <FlashcardStudySessionModal 

@@ -10,12 +10,13 @@ import {
     PencilIcon, TrashIcon, ArrowRightIcon, ClockIcon,
     BoltIcon, CheckCircleIcon, BrainIcon, MapIcon, 
     ClipboardDocumentCheckIcon, PuzzlePieceIcon, ScaleIcon,
-    PaintBrushIcon
+    PaintBrushIcon, ArrowsRightLeftIcon
 } from '../icons';
 import * as engine from '../../services/activityEngine';
 import * as srs from '../../services/srsService';
 import ConfirmationModal from '../ConfirmationModal';
 import LiteralnessEditorModal from './LiteralnessEditorModal';
+import MoveArticleModal from './MoveArticleModal';
 import StudySessionModal from '../StudySessionModal';
 import FlashcardStudySessionModal from '../FlashcardStudySessionModal';
 import PairMatchGame from '../pairmatch/PairMatchGame'; 
@@ -100,7 +101,7 @@ const ProgressBar: React.FC<{ value: number, label: string, color: string }> = (
 );
 
 const LiteralnessLawMap: React.FC<LiteralnessLawMapProps> = ({ cards, onViewArticle, activeLawId, onSelectLaw }) => {
-    const { deleteCards, updateCard } = useLiteralnessDispatch();
+    const { deleteCards, updateCard, moveCardToLaw } = useLiteralnessDispatch();
     const allQuestions = useQuestionState();
     const allFlashcards = useFlashcardState();
     const { updateBatchFlashcards } = useFlashcardDispatch();
@@ -110,6 +111,7 @@ const LiteralnessLawMap: React.FC<LiteralnessLawMapProps> = ({ cards, onViewArti
     const selectedLawId = activeLawId !== undefined ? activeLawId : internalLawId;
     const [cardToDelete, setCardToDelete] = useState<LiteralnessCard | null>(null);
     const [cardToEdit, setCardToEdit] = useState<LiteralnessCard | null>(null);
+    const [cardToMove, setCardToMove] = useState<LiteralnessCard | null>(null);
     
     // Visual Menu State
     const [openMenuCardId, setOpenMenuCardId] = useState<string | null>(null);
@@ -140,6 +142,10 @@ const LiteralnessLawMap: React.FC<LiteralnessLawMapProps> = ({ cards, onViewArti
         });
         return Object.entries(groups).sort((a, b) => b[1].critical - a[1].critical);
     }, [cards, cardSmartStats]);
+
+    const allLawIds = useMemo(() => {
+        return lawGroups.map(([id]) => id).sort();
+    }, [lawGroups]);
 
     const filteredArticles = useMemo(() => {
         if (!selectedLawId) return [];
@@ -331,7 +337,8 @@ const LiteralnessLawMap: React.FC<LiteralnessLawMapProps> = ({ cards, onViewArti
                                         )}
                                     </button>
                                     
-                                    <button onClick={(e) => { e.stopPropagation(); setCardToEdit(card); }} className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setCardToEdit(card); }} className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"><PencilIcon className="w-4 h-4"/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setCardToMove(card); }} className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"><ArrowsRightLeftIcon className="w-4 h-4"/></button>
                                     <button onClick={(e) => { e.stopPropagation(); setCardToDelete(card); }} className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                 </div>
                             </div>
@@ -342,6 +349,15 @@ const LiteralnessLawMap: React.FC<LiteralnessLawMapProps> = ({ cards, onViewArti
 
             <ConfirmationModal isOpen={!!cardToDelete} onClose={() => setCardToDelete(null)} onConfirm={() => deleteCards([cardToDelete!.id])} title="Excluir Artigo?"><p>Deseja remover permanentemente <strong>{cardToDelete?.article}</strong>?</p></ConfirmationModal>
             {cardToEdit && <LiteralnessEditorModal isOpen={true} onClose={() => setCardToEdit(null)} card={cardToEdit} />}
+            {cardToMove && (
+                <MoveArticleModal 
+                    isOpen={true} 
+                    onClose={() => setCardToMove(null)} 
+                    card={cardToMove} 
+                    availableLaws={allLawIds} 
+                    onConfirm={moveCardToLaw} 
+                />
+            )}
             
             {/* Action Modals */}
             {activeQuestionSession && (

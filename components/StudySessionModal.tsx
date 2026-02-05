@@ -27,9 +27,10 @@ interface StudySessionModalProps {
   onStudyRefNavigate?: (ref: StudyRef) => void;
   lessonId?: string; 
   context?: QuestionContextType; 
+  sessionType?: 'questions' | 'gaps'; // NEW: Explicit session type
 }
 
-const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, questions, title, initialIndex = 0, onSessionFinished, onStudyRefNavigate, lessonId, context = 'session' }) => {
+const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, questions, title, initialIndex = 0, onSessionFinished, onStudyRefNavigate, lessonId, context = 'session', sessionType = 'questions' }) => {
   const { updateQuestion } = useQuestionDispatch();
   const { settings } = useSettings();
   
@@ -56,11 +57,20 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
   // Init
   useEffect(() => {
     if (isOpen && !isInitialized && questions.length > 0) {
-      // CRITICAL FIX: Sanitize queue to remove any Gaps that might have leaked in
-      const validQuestions = questions.filter(isStrictQuestion);
+      // Logic: Filter based on sessionType. 
+      // If 'questions', use strict filter. 
+      // If 'gaps', trust the input (or filter to ensure isGapType=true if available, but legacy gaps might miss flag)
+      let validQuestions: Question[] = [];
+      
+      if (sessionType === 'questions') {
+          validQuestions = questions.filter(isStrictQuestion);
+      } else {
+          // For Gaps, we accept them. Ensure they have minimal fields.
+          validQuestions = questions.filter(q => q.questionText && (q.correctAnswer || q.options));
+      }
       
       if (validQuestions.length === 0 && questions.length > 0) {
-          console.warn("[StudySession] All items were filtered out as invalid Gaps.");
+          console.warn(`[StudySession] All items filtered out. SessionType: ${sessionType}`);
           onClose(); // Close if everything was invalid
           return;
       }
@@ -84,7 +94,7 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
     } else if (!isOpen) {
       setIsInitialized(false);
     }
-  }, [isOpen, questions, isInitialized, settings, sessionInitialStates, onClose]);
+  }, [isOpen, questions, isInitialized, settings, sessionInitialStates, onClose, sessionType]);
 
   const finalizeSession = useCallback((completed: boolean) => {
       const attemptsCount = answeredQuestions.length;
@@ -102,13 +112,13 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
       );
       const report = buildReportFromQuestions(
           lessonId || 'GERAL',
-          'QUESTOES',
+          sessionType === 'gaps' ? 'LACUNAS' : 'QUESTOES', // Use correct type for report
           sessionStartTimeRef.current || new Date(),
           answeredQuestions
       );
       saveAttemptReport(report);
       setSessionSummary(result);
-  }, [answeredQuestions, lessonId, sessionInitialStates, settings, title, onClose]);
+  }, [answeredQuestions, lessonId, sessionInitialStates, settings, title, onClose, sessionType]);
 
   const handleRunnerResult = (rating: 'again' | 'hard' | 'good' | 'easy', timeTaken: number, trapscanData?: TrapscanEntry) => {
     if (!currentQuestion) return;
@@ -164,8 +174,15 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
     updateQuestion(updated);
     setAnsweredQuestions(prev => [...prev, updated]);
     
-    if (settings.showHistoryAfterAnswer) {
+    // Auto-advance if not showing history (default true in settings but check)
+    // For Gaps, we might want faster flow
+    if (settings.showHistoryAfterAnswer && sessionType !== 'gaps') {
         setReportQuestion(updated);
+    } else {
+        // Delay slightly for visual feedback if needed, handled by runner or immediate next
+        // Since Runner handles immediate feedback visually, we can wait 800ms
+        // But Runner calls this *after* its internal delay usually.
+        // We'll trust the parent to move next.
     }
   };
 
@@ -189,14 +206,16 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
   return ReactDOM.createPortal(
     <div className={isDark ? 'dark' : ''} style={themeStyles}>
       
-      {/* PREFLIGHT INTERCEPTOR */}
-      <TrapscanPreflightModal 
-        isOpen={isPreflightOpen && !summaryResult} 
-        onConfirm={handleConfirmPreflight}
-        onCancel={() => { /* Ideally close session, but confirming defaults is safer UX */ }}
-      />
+      {/* PREFLIGHT INTERCEPTOR (Only for Questions) */}
+      {sessionType === 'questions' && (
+          <TrapscanPreflightModal 
+            isOpen={isPreflightOpen && !summaryResult} 
+            onConfirm={handleConfirmPreflight}
+            onCancel={() => { /* Ideally close session, but confirming defaults is safer UX */ }}
+          />
+      )}
 
-      <div className={`fixed inset-0 z-[9999] flex flex-col bg-black/80 backdrop-blur-sm items-center justify-center md:p-4 transition-opacity duration-300 ${isPreflightOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} onClick={() => !summaryResult && setIsLeaveConfirmOpen(true)}>
+      <div className={`fixed inset-0 z-[9999] flex flex-col bg-black/80 backdrop-blur-sm items-center justify-center md:p-4 transition-opacity duration-300 ${isPreflightOpen && sessionType === 'questions' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} onClick={() => !summaryResult && setIsLeaveConfirmOpen(true)}>
         <div 
             className="bg-[var(--q-surface)] text-[var(--q-text)] w-full h-[100dvh] md:h-[90vh] md:max-w-2xl md:rounded-3xl shadow-2xl border border-[var(--q-border)] flex flex-col overflow-hidden transition-all duration-300"
             onClick={e => e.stopPropagation()}
@@ -213,6 +232,7 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
                     onClose={() => setIsLeaveConfirmOpen(true)}
                     context={context}
                     mode="SRS"
+                    allowGaps={sessionType === 'gaps'} // Pass flag to Runner
                 />
             )}
 

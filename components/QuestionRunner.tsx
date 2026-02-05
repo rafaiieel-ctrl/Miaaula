@@ -25,6 +25,7 @@ interface QuestionRunnerProps {
     onClose?: () => void;
     context: QuestionContextType;
     mode?: 'SRS' | 'SIMPLE'; // SRS shows 4 buttons, SIMPLE shows Next/Finish
+    allowGaps?: boolean; // NEW: Allow running Gap type items
 }
 
 const MediaBlock: React.FC<{ image?: string, audio?: string }> = ({ image, audio }) => {
@@ -49,7 +50,8 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     isLast, 
     onClose, 
     context,
-    mode = 'SRS'
+    mode = 'SRS',
+    allowGaps = false
 }) => {
     const { settings, updateSettings } = useSettings();
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,8 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
 
     // --- FAIL-SAFE GUARD ---
     // If a Gap slips through (e.g. from an old cache or unfiltered list), we must not crash or show broken UI.
-    const isInvalidContent = !isStrictQuestion(question);
+    // BUT if allowGaps is true, we proceed.
+    const isInvalidContent = !allowGaps && !isStrictQuestion(question);
 
     useEffect(() => {
         if (isInvalidContent) {
@@ -126,8 +129,10 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     }, [question.id]);
 
     // Computed Locks
-    const isLocked = trapscanLogic.checkAlternativesLocked(activeConfig, trapscanData);
-    const blockReason = trapscanLogic.getSubmitBlockReason(activeConfig, trapscanData, !!selectedOption);
+    // Gaps (allowGaps=true) do NOT use Trapscan locking logic
+    const isGap = allowGaps && (question.isGapType || question.questionText.includes('{{'));
+    const isLocked = !isGap && trapscanLogic.checkAlternativesLocked(activeConfig, trapscanData);
+    const blockReason = !isGap ? trapscanLogic.getSubmitBlockReason(activeConfig, trapscanData, !!selectedOption) : null;
     const canSubmit = !blockReason;
 
     // Handlers
@@ -171,7 +176,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         updateSettings({ readerMode: newMode });
     };
 
-    const showTrapscan = trapscanLogic.isTrapscanActive(activeConfig) && !question.isGapType;
+    const showTrapscan = !isGap && trapscanLogic.isTrapscanActive(activeConfig) && !question.isGapType;
 
     return (
         <div className="flex flex-col h-full bg-[var(--q-surface)] text-[var(--q-text)] relative">
@@ -182,7 +187,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                     <p className="text-[10px] font-semibold text-[var(--q-muted)] uppercase mt-0.5">{question.subject}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {activeConfig?.enabled && (
+                    {activeConfig?.enabled && showTrapscan && (
                         <div className={`hidden sm:block px-2 py-0.5 rounded text-[9px] font-black uppercase border ${activeConfig.assistMode ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-slate-500/10 border-slate-500/30 text-slate-500'}`}>
                             {activeConfig.assistMode ? (activeConfig.defaultMode === 'GUIA' ? 'GUIA' : `LOCK: ${activeConfig.lockLevel}`) : 'OFF'}
                         </div>
@@ -239,6 +244,8 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                           eliminatedOptions={eliminatedOptions}
                           onEliminate={handleEliminate}
                           highlightText={highlightAnchor ? getText(question.anchorText) : undefined}
+                          // Gap Mode
+                          // This passes visual mode to PromptText inside Viewer
                       />
                   </ReadingContainer>
             </div>
