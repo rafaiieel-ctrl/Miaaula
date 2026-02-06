@@ -102,12 +102,17 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     // -----------------------
     
     // Merge global settings with session config.
-    const activeConfig = useMemo(() => {
+    const activeConfig: TrapscanSessionConfig = useMemo(() => {
         // Fix: Respect sessionConfig if provided (Preflight toggle)
         if (sessionConfig) {
             return sessionConfig;
         }
-        return settings.trapscan || { enabled: true, assistMode: true, defaultMode: 'TREINO', lockLevel: 'SOFT' };
+        return settings.trapscan || { 
+            enabled: true, 
+            assistMode: true, 
+            defaultMode: 'TREINO' as const, 
+            lockLevel: 'SOFT' as const 
+        };
     }, [sessionConfig, settings.trapscan]);
 
     // State
