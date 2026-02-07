@@ -199,6 +199,7 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
         ...currentQuestion, 
         ...questionUpdates, 
         lastWasCorrect: isCorrectNow, 
+        yourAnswer: isCorrectNow ? currentQuestion.correctAnswer : 'ERROR', // Simplify for session view
         selfEvalLevel: evalLevel, 
         totalAttempts: (currentQuestion.totalAttempts || 0) + 1,
         attemptHistory: [
@@ -282,7 +283,11 @@ const StudySessionModal: React.FC<StudySessionModalProps> = ({ isOpen, onClose, 
             onClick={e => e.stopPropagation()}
         >
             {summaryResult ? (
-                  <StudyReportModal result={summaryResult} onClose={() => { onSessionFinished?.(); onClose(); }} />
+                  <StudyReportModal 
+                    result={summaryResult} 
+                    questions={answeredQuestions}
+                    onClose={() => { onSessionFinished?.(); onClose(); }} 
+                  />
             ) : waitState.active ? (
                   <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-6">
                       <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center animate-pulse">

@@ -1,10 +1,15 @@
 
-import React from 'react';
-import { SessionResult } from '../types';
-import { CheckCircleIcon, XCircleIcon, ClockIcon, ChartBarIcon, ArrowRightIcon, TrendingUpIcon, ExclamationTriangleIcon, CalendarIcon } from './icons';
+import React, { useState, useMemo } from 'react';
+import { SessionResult, Question } from '../types';
+import { 
+    CheckCircleIcon, XCircleIcon, ClockIcon, ChartBarIcon, 
+    ArrowRightIcon, TrendingUpIcon, ExclamationTriangleIcon, 
+    CalendarIcon, ChevronDownIcon, ChevronRightIcon, ListBulletIcon 
+} from './icons';
 
 interface StudyReportModalProps {
     result: SessionResult;
+    questions?: Question[];
     onClose: () => void;
 }
 
@@ -19,12 +24,47 @@ const StatBox: React.FC<{ label: string; value: string | number; colorClass: str
     </div>
 );
 
-const StudyReportModal: React.FC<StudyReportModalProps> = ({ result, onClose }) => {
+const DetailItem: React.FC<{ q: Question }> = ({ q }) => {
+    const isCorrect = q.lastWasCorrect;
+    return (
+        <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${isCorrect ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
+            <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${isCorrect ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                        {isCorrect ? 'Acerto' : 'Erro'}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500">{q.questionRef}</span>
+                </div>
+                {isCorrect ? <CheckCircleIcon className="w-4 h-4 text-emerald-500"/> : <XCircleIcon className="w-4 h-4 text-rose-500"/>}
+            </div>
+            
+            <p className="text-xs text-slate-300 line-clamp-2 font-medium">{q.questionText}</p>
+            
+            <div className="flex gap-4 text-[10px] uppercase font-bold pt-2 border-t border-white/5">
+                {!isCorrect && q.yourAnswer && (
+                    <span className="text-rose-400">Você: {q.yourAnswer}</span>
+                )}
+                <span className="text-emerald-400">Gabarito: {q.correctAnswer}</span>
+            </div>
+        </div>
+    );
+};
+
+const StudyReportModal: React.FC<StudyReportModalProps> = ({ result, questions = [], onClose }) => {
+    const [showDetails, setShowDetails] = useState(false);
+    const [detailFilter, setDetailFilter] = useState<'ALL' | 'ERRORS' | 'CORRECT'>('ALL');
+
     const accuracyColor = result.accuracy >= 80 ? 'text-emerald-400' : result.accuracy >= 60 ? 'text-sky-400' : 'text-rose-400';
     const accuracyBg = result.accuracy >= 80 ? 'from-emerald-500/20 to-emerald-900/5' : result.accuracy >= 60 ? 'from-sky-500/20 to-sky-900/5' : 'from-rose-500/20 to-rose-900/5';
     const accuracyBorder = result.accuracy >= 80 ? 'border-emerald-500/30' : result.accuracy >= 60 ? 'border-sky-500/30' : 'border-rose-500/30';
 
     const formattedDate = new Date(result.endedAt).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    const filteredQuestions = useMemo(() => {
+        if (detailFilter === 'ERRORS') return questions.filter(q => !q.lastWasCorrect);
+        if (detailFilter === 'CORRECT') return questions.filter(q => q.lastWasCorrect);
+        return questions;
+    }, [questions, detailFilter]);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-[#020617]">
@@ -113,6 +153,50 @@ const StudyReportModal: React.FC<StudyReportModalProps> = ({ result, onClose }) 
                             </div>
                         </div>
                     </div>
+                    
+                    {/* DETAILS SECTION (NEW) */}
+                    {questions.length > 0 && (
+                        <div className="w-full">
+                            <button 
+                                onClick={() => setShowDetails(!showDetails)}
+                                className="w-full p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors flex items-center justify-between group"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-slate-800 rounded-lg text-slate-400">
+                                        <ListBulletIcon className="w-5 h-5"/>
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="block text-sm font-bold text-white group-hover:text-sky-400 transition-colors">Detalhamento da Sessão</span>
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Ver lista de respostas</span>
+                                    </div>
+                                </div>
+                                <div className={`text-slate-500 transition-transform duration-300 ${showDetails ? 'rotate-180' : ''}`}>
+                                    <ChevronDownIcon className="w-5 h-5" />
+                                </div>
+                            </button>
+                            
+                            {showDetails && (
+                                <div className="mt-4 animate-fade-in space-y-4">
+                                    {/* Filters */}
+                                    <div className="flex p-1 bg-black/20 rounded-xl border border-white/5">
+                                        <button onClick={() => setDetailFilter('ALL')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${detailFilter === 'ALL' ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Todos</button>
+                                        <button onClick={() => setDetailFilter('ERRORS')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${detailFilter === 'ERRORS' ? 'bg-rose-500/20 text-rose-400' : 'text-slate-500 hover:text-slate-300'}`}>Erros</button>
+                                        <button onClick={() => setDetailFilter('CORRECT')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${detailFilter === 'CORRECT' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}>Acertos</button>
+                                    </div>
+                                    
+                                    <div className="space-y-3">
+                                        {filteredQuestions.length === 0 ? (
+                                            <div className="text-center py-6 text-slate-500 text-xs italic">Nenhum item neste filtro.</div>
+                                        ) : (
+                                            filteredQuestions.map((q, idx) => (
+                                                <DetailItem key={`${q.id}_${idx}`} q={q} />
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {!result.isCompleted && (
                         <div className="w-full p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3">
