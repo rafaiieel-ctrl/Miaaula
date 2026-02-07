@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useQuestionState } from '../contexts/QuestionContext';
 import { useFlashcardState } from '../contexts/FlashcardContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -12,7 +12,7 @@ import {
     TrashIcon, ExclamationTriangleIcon, ClockIcon, 
     ChartBarIcon, CheckCircleIcon, PlayIcon,
     BoltIcon, BookOpenIcon, BookmarkIcon, BookmarkSolidIcon,
-    ListBulletIcon, MapIcon
+    ListBulletIcon, MapIcon, FireIcon
 } from '../components/icons';
 import StudySessionModal from '../components/StudySessionModal';
 import ErrorDiagnosticsReport from '../components/reports/ErrorDiagnosticsReport'; 
@@ -23,6 +23,7 @@ import { filterExecutableItems } from '../services/contentGate'; // Import Gate
 
 type SortMode = 'pending' | 'alpha' | 'mastery' | 'errors' | 'critical';
 type ViewMode = 'sectors' | 'list';
+type DifficultyMode = 'all' | 'easy' | 'normal' | 'difficult';
 
 const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     const allQuestions = useQuestionState();
@@ -36,6 +37,9 @@ const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSector, setSelectedSector] = useState<any | null>(null);
     
+    // Session Config State
+    const [difficulty, setDifficulty] = useState<DifficultyMode>('all');
+    
     // Feature States
     const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
     const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
@@ -43,6 +47,13 @@ const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     
     // Session State
     const [activeSession, setActiveSession] = useState<{ title: string; questions: Question[] } | null>(null);
+
+    // Reset difficulty when selecting a new sector
+    useEffect(() => {
+        if (selectedSector) {
+            setDifficulty('all');
+        }
+    }, [selectedSector]);
 
     // --- CONTENT GATE ---
     const activeQuestions = useMemo(() => filterExecutableItems(allQuestions), [allQuestions]);
@@ -119,6 +130,7 @@ const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
         let title = `Sessão: ${subject}`;
         const markedIds = new Set(studyLater.getStudyLaterIds());
         
+        // 1. Filter by Mode
         if (mode === 'errors') {
             pool = pool.filter(q => !q.lastWasCorrect && q.totalAttempts > 0);
             title = `Recuperação: ${subject}`;
@@ -130,8 +142,15 @@ const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
             title = `Marcados: ${subject}`;
         }
 
+        // 2. Filter by Difficulty (only if Normal mode or generic practice)
+        if (difficulty !== 'all' && mode === 'normal') {
+            pool = pool.filter(q => q.difficultyLevel === difficulty);
+            const diffLabel = difficulty === 'easy' ? 'Fácil' : difficulty === 'normal' ? 'Médio' : 'Difícil';
+            title += ` (${diffLabel})`;
+        }
+
         if (pool.length === 0) {
-            alert(`Sem questões disponíveis neste filtro (ou estão congeladas).`);
+            alert(`Sem questões disponíveis neste filtro (Dificuldade: ${difficulty}).`);
             return;
         }
 
@@ -340,68 +359,101 @@ const SectorsExploreView: React.FC<{ onExit: () => void }> = ({ onExit }) => {
 
             {/* Detail Modal / Bottom Sheet */}
             {selectedSector && (
-                <div className="fixed inset-0 z-[11000] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedSector(null)}>
-                    <div className="bg-slate-900 border-2 border-white/10 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl p-8 space-y-8 animate-fade-in-up max-h-[85vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-start">
-                            <div className="min-w-0 pr-4">
-                                <h3 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none">{selectedSector.label}</h3>
-                                <p className="text-[10px] font-black text-sky-400 uppercase tracking-[0.4em] mt-3 italic">Painel do Setor</p>
-                            </div>
-                            <button onClick={() => setSelectedSector(null)} className="p-3 bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-colors">
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
+                <div className="fixed inset-0 z-[11000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedSector(null)}>
+                    <div className="bg-[#0f121e] border border-slate-800 w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 space-y-6 animate-fade-in-up max-h-[90vh] overflow-y-auto custom-scrollbar relative" onClick={e => e.stopPropagation()}>
+                        
+                        {/* Header Reorganized */}
+                        <div className="text-center relative mb-2">
+                             <div className="absolute top-0 right-0">
+                                 <button onClick={() => setSelectedSector(null)} className="p-2 bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors">
+                                     <XMarkIcon className="w-5 h-5" />
+                                 </button>
+                             </div>
+                             <span className="text-[10px] font-black text-sky-500 uppercase tracking-[0.4em] mb-2 block">SETOR ATIVO</span>
+                             <h3 
+                                 className="text-3xl md:text-4xl font-black text-white italic tracking-tighter uppercase leading-none break-words line-clamp-2"
+                                 title={selectedSector.label}
+                             >
+                                 {selectedSector.label}
+                             </h3>
                         </div>
 
+                        {/* Stats Grid */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5 text-center">
-                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1">Domínio Total</span>
-                                <p className="text-3xl font-black text-white">{Number(selectedSector.masteryAll.toFixed(2))}%</p>
+                            <div className="bg-slate-900/50 p-5 rounded-[2rem] border border-white/5 text-center shadow-inner">
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Domínio</span>
+                                <p className="text-3xl font-black text-emerald-400">{Number(selectedSector.masteryAll.toFixed(2))}%</p>
                             </div>
-                            <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5 text-center">
-                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1">Questões</span>
+                            <div className="bg-slate-900/50 p-5 rounded-[2rem] border border-white/5 text-center shadow-inner">
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Questões</span>
                                 <p className="text-3xl font-black text-white">{selectedSector.total}</p>
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => startSession(selectedSector.label, 'normal')}
-                                className="w-full bg-white text-slate-950 font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all active:scale-[0.98] hover:bg-sky-50 text-xs"
-                            >
-                                <PlayIcon className="w-5 h-5 fill-current" /> Iniciar Prática
-                            </button>
-                            
-                            <div className="grid grid-cols-3 gap-2">
-                                <button 
-                                    onClick={() => startSession(selectedSector.label, 'marked')}
-                                    disabled={selectedSector.markedCount === 0}
-                                    className="flex flex-col items-center justify-center p-4 rounded-[1.5rem] bg-indigo-500/10 border-2 border-indigo-500/20 text-indigo-500 font-black uppercase tracking-widest text-[8px] hover:bg-indigo-500/20 transition-all disabled:opacity-20 disabled:grayscale"
-                                >
-                                    <BookmarkSolidIcon className="w-5 h-5 mb-2" /> Marcados ({selectedSector.markedCount})
-                                </button>
-                                <button 
-                                    onClick={() => startSession(selectedSector.label, 'errors')}
-                                    disabled={selectedSector.errorCount === 0}
-                                    className="flex flex-col items-center justify-center p-4 rounded-[1.5rem] bg-rose-500/10 border-2 border-rose-500/20 text-rose-500 font-black uppercase tracking-widest text-[8px] hover:bg-rose-500/20 transition-all disabled:opacity-20 disabled:grayscale"
-                                >
-                                    <TrashIcon className="w-5 h-5 mb-2" /> Erradas ({selectedSector.errorCount})
-                                </button>
-                                <button 
-                                    onClick={() => startSession(selectedSector.label, 'critical')}
-                                    disabled={selectedSector.criticalCount === 0}
-                                    className="flex flex-col items-center justify-center p-4 rounded-[1.5rem] bg-amber-500/10 border-2 border-amber-500/20 text-amber-500 font-black uppercase tracking-widest text-[8px] hover:bg-amber-500/20 transition-all disabled:opacity-20 disabled:grayscale"
-                                >
-                                    <ExclamationTriangleIcon className="w-5 h-5 mb-2" /> Críticos ({selectedSector.criticalCount})
-                                </button>
+                        {/* Difficulty Selector */}
+                        <div>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 text-center">Nível de Dificuldade</p>
+                            <div className="flex p-1 bg-black/30 rounded-xl border border-white/5">
+                                {[
+                                    { id: 'all', label: 'Mix' },
+                                    { id: 'easy', label: 'Fácil' },
+                                    { id: 'normal', label: 'Médio' },
+                                    { id: 'difficult', label: 'Difícil' }
+                                ].map((d) => (
+                                    <button
+                                        key={d.id}
+                                        onClick={() => setDifficulty(d.id as DifficultyMode)}
+                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                                            difficulty === d.id 
+                                            ? 'bg-white text-slate-950 shadow-md' 
+                                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                        }`}
+                                    >
+                                        {d.label}
+                                    </button>
+                                ))}
                             </div>
+                        </div>
 
+                        {/* Main CTA */}
+                        <button 
+                            onClick={() => startSession(selectedSector.label, 'normal')}
+                            className="w-full bg-white hover:bg-slate-200 text-slate-950 font-black py-4 rounded-[1.5rem] shadow-[0_0_20px_rgba(255,255,255,0.1)] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-[0.98] text-xs"
+                        >
+                            <PlayIcon className="w-4 h-4 fill-current" /> Iniciar Prática
+                        </button>
+                        
+                        {/* Secondary Actions */}
+                        <div className="grid grid-cols-3 gap-2">
                             <button 
-                                onClick={handleViewContent}
-                                className="w-full bg-white/5 text-slate-400 font-black py-4 rounded-[2rem] border border-white/5 uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all hover:bg-white/10 hover:text-white text-[10px]"
+                                onClick={() => startSession(selectedSector.label, 'marked')}
+                                disabled={selectedSector.markedCount === 0}
+                                className="flex flex-col items-center justify-center p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-widest text-[8px] hover:bg-indigo-500/20 transition-all disabled:opacity-30 disabled:grayscale"
                             >
-                                <BookOpenIcon className="w-4 h-4" /> Ver Conteúdo
+                                <BookmarkSolidIcon className="w-4 h-4 mb-1" /> Marcados ({selectedSector.markedCount})
+                            </button>
+                            <button 
+                                onClick={() => startSession(selectedSector.label, 'errors')}
+                                disabled={selectedSector.errorCount === 0}
+                                className="flex flex-col items-center justify-center p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 font-bold uppercase tracking-widest text-[8px] hover:bg-rose-500/20 transition-all disabled:opacity-30 disabled:grayscale"
+                            >
+                                <TrashIcon className="w-4 h-4 mb-1" /> Erradas ({selectedSector.errorCount})
+                            </button>
+                            <button 
+                                onClick={() => startSession(selectedSector.label, 'critical')}
+                                disabled={selectedSector.criticalCount === 0}
+                                className="flex flex-col items-center justify-center p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 font-bold uppercase tracking-widest text-[8px] hover:bg-amber-500/20 transition-all disabled:opacity-30 disabled:grayscale"
+                            >
+                                <ExclamationTriangleIcon className="w-4 h-4 mb-1" /> Críticos ({selectedSector.criticalCount})
                             </button>
                         </div>
+
+                        <button 
+                            onClick={handleViewContent}
+                            className="w-full py-3 rounded-2xl border border-white/5 text-slate-500 hover:text-white hover:bg-white/5 font-bold uppercase tracking-[0.2em] text-[10px] transition-all flex items-center justify-center gap-2"
+                        >
+                            <BookOpenIcon className="w-4 h-4" /> Ver Conteúdo
+                        </button>
                     </div>
                 </div>
             )}
