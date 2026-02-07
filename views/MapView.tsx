@@ -415,6 +415,20 @@ const MapView: React.FC<MapViewProps> = ({ onStudyRefNavigate, onToggleUI }) => 
         });
         setFocusedNode(prev => prev ? { ...prev, isCritical: newStatus } : null);
     };
+    
+    // Function to update priority
+    const handleSetPriority = (level: 'low' | 'medium' | 'high') => {
+        if (!focusedNode || focusedNode.type !== 'subject') return;
+        const subject = focusedNode.id;
+        const currentConfig = settings.subjectConfigs[subject] || { priority: 'medium', isFrozen: false };
+        
+        updateSettings({
+            subjectConfigs: {
+                ...settings.subjectConfigs,
+                [subject]: { ...currentConfig, priority: level }
+            }
+        });
+    };
 
     // CRITICAL FIX: Ensure startSession filters using normalized discipline
     const startSession = (mode: 'normal' | 'errors' | 'critical' | 'marked') => {
@@ -520,6 +534,9 @@ const MapView: React.FC<MapViewProps> = ({ onStudyRefNavigate, onToggleUI }) => 
     }, []);
 
     const getColorClass = (val: number) => val < 40 ? 'text-rose-500' : val < 80 ? 'text-amber-500' : 'text-emerald-500';
+    
+    // Get current priority for display
+    const currentPriority = focusedNode ? (settings.subjectConfigs[focusedNode.id]?.priority || 'medium') : 'medium';
 
     return (
         <div className="w-full h-full min-h-[85vh] bg-[#020617] relative overflow-hidden font-sans" ref={containerRef}>
@@ -599,42 +616,62 @@ const MapView: React.FC<MapViewProps> = ({ onStudyRefNavigate, onToggleUI }) => 
             </div>
 
             {focusedNode && (
-                <div className="absolute top-0 left-0 w-full z-30 pointer-events-none flex justify-center pt-8 px-4">
-                    <div className="bg-slate-900 border-2 border-white/10 p-6 rounded-[2.5rem] shadow-2xl w-full max-w-md pointer-events-auto animate-slide-down">
-                        <div className="flex justify-between items-start mb-6">
-                            <div className="min-w-0 pr-4">
-                                <span className="text-[9px] font-black text-sky-500 uppercase tracking-[0.3em] block mb-1">{focusedNode.type === 'subject' ? 'Setor Ativo' : 'Satélite'}</span>
-                                <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none truncate">{focusedNode.label}</h2>
-                            </div>
-                            <div className="flex gap-2">
-                                {focusedNode.type === 'subject' && (
-                                    <>
-                                        <button 
-                                            onClick={() => setIsFreezeModalOpen(true)}
-                                            className="p-2 rounded-full transition-all border bg-white/5 border-white/5 text-sky-500 hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/20" 
-                                            title="Congelar disciplina"
-                                        >
-                                            <SnowflakeIcon className="w-5 h-5" />
-                                        </button>
-                                        <button 
-                                            onClick={() => setIsDeleteModalOpen(true)}
-                                            className="p-2 rounded-full transition-all border bg-white/5 border-white/5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/20" 
-                                            title="Excluir disciplina e questões"
-                                        >
-                                            <TrashIcon className="w-5 h-5" />
-                                        </button>
-                                        <button onClick={toggleNodeCriticalStatus} className={`p-2 rounded-full transition-all border ${focusedNode.isCritical ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)] animate-pulse' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`} title={focusedNode.isCritical ? "Desmarcar Crítico" : "Marcar como Crítico (Inverte Rotação)"}>
-                                            <ExclamationTriangleIcon className="w-5 h-5" />
-                                        </button>
-                                    </>
-                                )}
-                                <button onClick={handleCloseDetail} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors"><XMarkIcon className="w-5 h-5"/></button>
-                            </div>
+                <div className="absolute top-0 left-0 w-full z-30 pointer-events-none flex justify-center pt-8 px-4 h-full pointer-events-none">
+                    <div className="bg-slate-900 border-2 border-white/10 p-6 rounded-[2.5rem] shadow-2xl w-full max-w-md pointer-events-auto animate-slide-down max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
+                        
+                        <div className="flex justify-end mb-2">
+                             <button onClick={handleCloseDetail} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors"><XMarkIcon className="w-5 h-5"/></button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 mb-6">
+                        
+                        <div className="mb-4">
+                             <span className="text-[9px] font-black text-sky-500 uppercase tracking-[0.3em] block mb-1">
+                                 {focusedNode.type === 'subject' ? 'Setor Ativo' : 'Satélite'}
+                             </span>
+                             <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-tight break-words hyphens-auto">
+                                 {focusedNode.label}
+                             </h2>
+                             {/* Controls Row */}
+                             {focusedNode.type === 'subject' && (
+                                <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+                                    <button 
+                                        onClick={() => setIsFreezeModalOpen(true)}
+                                        className="flex-1 py-2 rounded-xl transition-all border bg-white/5 border-white/5 text-sky-500 hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/20 flex items-center justify-center gap-2" 
+                                        title="Congelar"
+                                    >
+                                        <SnowflakeIcon className="w-4 h-4" /> <span className="text-[9px] font-bold uppercase">Congelar</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setIsDeleteModalOpen(true)}
+                                        className="flex-1 py-2 rounded-xl transition-all border bg-white/5 border-white/5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/20 flex items-center justify-center gap-2" 
+                                        title="Excluir"
+                                    >
+                                        <TrashIcon className="w-4 h-4" /> <span className="text-[9px] font-bold uppercase">Excluir</span>
+                                    </button>
+                                    <button 
+                                        onClick={toggleNodeCriticalStatus} 
+                                        className={`flex-1 py-2 rounded-xl transition-all border flex items-center justify-center gap-2 ${focusedNode.isCritical ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-white/5 border-white/5 text-slate-500 hover:text-white hover:bg-white/10'}`} 
+                                        title={focusedNode.isCritical ? "Desmarcar Crítico" : "Marcar como Crítico"}
+                                    >
+                                        <ExclamationTriangleIcon className="w-4 h-4" /> <span className="text-[9px] font-bold uppercase">Crítico</span>
+                                    </button>
+                                </div>
+                             )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-4">
                             <div className="bg-white/5 p-4 rounded-3xl border border-white/5 text-center"><span className="block text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">Domínio</span><span className={`text-3xl font-black ${getColorClass(focusedNode.masteryAll)}`}>{focusedNode.masteryAll.toFixed(0)}%</span></div>
                              <div className="bg-white/5 p-4 rounded-3xl border border-white/5 text-center"><span className="block text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">Questões</span><span className="text-3xl font-black text-white">{focusedNode.totalCount || focusedNode.attempted}</span></div>
                         </div>
+                        
+                        {/* Priority Selector */}
+                        {focusedNode.type === 'subject' && (
+                             <div className="mb-6 p-1 bg-black/30 rounded-xl flex gap-1 border border-white/5">
+                                 <button onClick={() => handleSetPriority('low')} className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase transition-colors ${currentPriority === 'low' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>Baixa</button>
+                                 <button onClick={() => handleSetPriority('medium')} className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase transition-colors ${currentPriority === 'medium' ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>Média</button>
+                                 <button onClick={() => handleSetPriority('high')} className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase transition-colors ${currentPriority === 'high' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>Alta</button>
+                             </div>
+                        )}
+
                         {focusedNode.type === 'subject' && (
                             <div className="space-y-3">
                                 <button onClick={() => startSession('normal')} className="w-full py-4 rounded-[1.5rem] bg-white text-slate-950 font-black uppercase tracking-[0.2em] text-xs hover:bg-sky-50 active:scale-[0.98] transition-all shadow-lg flex items-center justify-center gap-3"><PlayIcon className="w-4 h-4 fill-current" /> Iniciar Prática</button>
