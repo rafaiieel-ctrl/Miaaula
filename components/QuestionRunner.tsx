@@ -1,34 +1,30 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Question, TrapscanEntry, TrapscanSessionConfig } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
-import { useTrapscanPreflight } from '../hooks/useTrapscanPreflight';
 import * as trapscanLogic from '../services/trapscanLogic';
-import * as srs from '../services/srsService';
 import { 
-    XMarkIcon, LockClosedIcon, CheckCircleIcon, ArrowRightIcon, 
-    ExclamationTriangleIcon, BoltIcon, FullScreenIcon, ExitFullScreenIcon
+    XMarkIcon, LockClosedIcon, ArrowRightIcon, 
+    ExclamationTriangleIcon, FullScreenIcon, ExitFullScreenIcon
 } from './icons';
 import QuestionViewer from './QuestionViewer';
 import TrapscanGate from './TrapscanGate';
 import QuestionActionsMenu, { QuestionContextType } from './QuestionActionsMenu';
 import ReadingContainer from './ui/ReadingContainer';
 import { getText } from '../utils/i18nText';
-import { isStrictQuestion } from '../services/contentGate'; // IMPORT GATE
-import ConfirmationModal from './ConfirmationModal'; // Added for delete confirmation
-import EditQuestionModal from './EditQuestionModal'; // Ensure Edit Modal is available internally or via prop
-import { useQuestionDispatch } from '../contexts/QuestionContext'; // For direct delete call if needed
+import { isStrictQuestion } from '../services/contentGate';
+import ConfirmationModal from './ConfirmationModal';
+import { useQuestionDispatch } from '../contexts/QuestionContext';
 
 interface QuestionRunnerProps {
     question: Question;
-    sessionConfig?: TrapscanSessionConfig | null; // Optional override from session
+    sessionConfig?: TrapscanSessionConfig | null;
     onResult: (rating: 'again' | 'hard' | 'good' | 'easy', timeTaken: number, trapscanData?: TrapscanEntry) => void;
     onNext?: () => void;
     isLast?: boolean;
     onClose?: () => void;
     context: QuestionContextType;
-    mode?: 'SRS' | 'SIMPLE'; // SRS shows 4 buttons, SIMPLE shows Next/Finish
-    allowGaps?: boolean; // NEW: Allow running Gap type items
+    mode?: 'SRS' | 'SIMPLE';
+    allowGaps?: boolean;
     onEdit?: (q: Question) => void;
     onDelete?: (id: string) => void;
 }
@@ -65,68 +61,59 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     const startTimeRef = useRef<number>(Date.now());
 
-    // --- FAIL-SAFE GUARD ---
-    // If a Gap slips through (e.g. from an old cache or unfiltered list), we must not crash or show broken UI.
-    // BUT if allowGaps is true, we proceed.
     const isInvalidContent = !allowGaps && !isStrictQuestion(question);
 
     useEffect(() => {
         if (isInvalidContent) {
-            console.warn("[QuestionRunner] Conteúdo inválido detectado (Lacuna em modo Questão). Pulando...", question.id);
-            // Attempt to auto-skip
+            console.warn("[QuestionRunner] Conteúdo inválido detectado. Pulando...", question.id);
             if (onNext) {
-                // Short timeout to avoid render-loop limits
                 const t = setTimeout(onNext, 100);
                 return () => clearTimeout(t);
             }
         }
     }, [question.id, isInvalidContent, onNext]);
 
-    // Local state for delete confirmation
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-    // Local state for edit modal if handler provided but wants internal handling (optional, mostly handled by parent via prop)
-    // We assume parent handles Edit via onEdit prop, but we handle Delete confirmation locally.
 
     if (isInvalidContent) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-10 text-center space-y-4">
                 <ExclamationTriangleIcon className="w-12 h-12 text-amber-500 opacity-50" />
                 <h3 className="text-xl font-bold text-white">Conteúdo Incompatível</h3>
-                <p className="text-slate-400 text-sm">Este item parece ser uma lacuna, mas entrou no modo de questões. Pulando...</p>
+                <p className="text-slate-400 text-sm">Este item parece ser uma lacuna em modo questão. Pulando...</p>
                 <button onClick={onNext} className="bg-white/10 px-6 py-2 rounded-lg text-sm font-bold uppercase hover:bg-white/20">
                     Forçar Pulo
                 </button>
             </div>
         );
     }
-    // -----------------------
     
-    // Merge global settings with session config.
+    // CORRECTION HERE: Explicit type annotation to satisfy TS2345/TS2322
     const activeConfig: TrapscanSessionConfig = useMemo(() => {
-        // Fix: Respect sessionConfig if provided (Preflight toggle)
         if (sessionConfig) {
             return sessionConfig;
         }
-        return settings.trapscan || { 
+        
+        // Define default object with explicit type so 'TREINO' is treated as TrapscanMode, not string
+        const defaults: TrapscanSessionConfig = { 
             enabled: true, 
             assistMode: true, 
-            defaultMode: 'TREINO' as const, 
-            lockLevel: 'SOFT' as const 
+            defaultMode: 'TREINO', 
+            lockLevel: 'SOFT' 
         };
+
+        return settings.trapscan || defaults;
     }, [sessionConfig, settings.trapscan]);
 
-    // State
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
     const [isRevealed, setIsRevealed] = useState(false);
     const [trapscanData, setTrapscanData] = useState<TrapscanEntry | undefined>(undefined);
     const [showBlockToast, setShowBlockToast] = useState<string | null>(null);
     
-    // NEW: Elimination State (Lifted from Gate)
     const [eliminatedOptions, setEliminatedOptions] = useState<string[]>([]);
     const [isEliminationMode, setIsEliminationMode] = useState(false);
     const [highlightAnchor, setHighlightAnchor] = useState(false);
 
-    // Reset on new question & Scroll to Top
     useEffect(() => {
         setSelectedOption(null);
         setIsRevealed(false);
@@ -137,20 +124,16 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         setIsDeleteConfirmOpen(false);
         startTimeRef.current = Date.now();
         
-        // AUTO-SCROLL FIX: Scroll to top immediately when question changes
         if (scrollRef.current) {
             scrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
         }
     }, [question.id]);
 
-    // Computed Locks
-    // Gaps (allowGaps=true) do NOT use Trapscan locking logic
     const isGap = allowGaps && (question.isGapType || question.questionText.includes('{{'));
     const isLocked = !isGap && trapscanLogic.checkAlternativesLocked(activeConfig, trapscanData);
     const blockReason = !isGap ? trapscanLogic.getSubmitBlockReason(activeConfig, trapscanData, !!selectedOption) : null;
     const canSubmit = !blockReason;
 
-    // Handlers
     const handleOptionSelect = (key: string) => {
         if (!isRevealed && !isLocked && !isEliminationMode) {
             setSelectedOption(key);
@@ -159,7 +142,7 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     
     const handleEliminate = (key: string) => {
         setEliminatedOptions(prev => {
-             if (prev.includes(key)) return prev.filter(k => k !== key); // Toggle off
+             if (prev.includes(key)) return prev.filter(k => k !== key);
              return [...prev, key];
         });
     };
@@ -196,15 +179,9 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
     };
 
     const handleConfirmDelete = () => {
-        // 1. Soft delete via Context
         deleteQuestions([question.id]);
-        
-        // 2. Notify Parent to remove from active queue if needed
         if (onDelete) onDelete(question.id);
-        
-        // 3. Move Next to avoid showing deleted question
         if (onNext) onNext();
-        
         setIsDeleteConfirmOpen(false);
     };
 
@@ -212,7 +189,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-[var(--q-surface)] text-[var(--q-text)] relative">
-            {/* Header */}
             <header className="px-5 py-4 border-b border-[var(--q-border)] flex justify-between items-center bg-[var(--q-surface)] backdrop-blur-md shrink-0 z-10">
                 <div className="min-w-0 pr-4">
                     <h2 className="text-sm font-extrabold tracking-tight truncate uppercase italic">{question.questionRef}</h2>
@@ -225,7 +201,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                         </div>
                     )}
                     
-                    {/* READER MODE TOGGLE */}
                     <button 
                         onClick={toggleReaderMode}
                         className="p-2 rounded-lg text-[var(--q-muted)] hover:bg-[var(--q-hover)] transition-colors hidden sm:block"
@@ -249,7 +224,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                 </div>
             </header>
 
-            {/* Content */}
             <div className="flex-1 overflow-y-auto custom-scrollbar" ref={scrollRef}>
                  <ReadingContainer mode={settings.readerMode} className="py-6 pb-24 md:py-8">
                       <MediaBlock image={question.questionImage} audio={question.questionAudio} />
@@ -263,7 +237,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                               onUpdate={setTrapscanData}
                               userAnswer={selectedOption}
                               configOverride={activeConfig}
-                              // Props for interaction
                               eliminatedOptions={eliminatedOptions}
                               onSetEliminationMode={setIsEliminationMode}
                               onSetHighlightAnchor={setHighlightAnchor}
@@ -277,18 +250,14 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                           onOptionSelect={handleOptionSelect}
                           showMedia={false} 
                           isLocked={isLocked}
-                          // Elimination Props
                           isEliminationMode={isEliminationMode}
                           eliminatedOptions={eliminatedOptions}
                           onEliminate={handleEliminate}
                           highlightText={highlightAnchor ? getText(question.anchorText) : undefined}
-                          // Gap Mode
-                          // This passes visual mode to PromptText inside Viewer
                       />
                   </ReadingContainer>
             </div>
 
-            {/* Toast for Block */}
             {showBlockToast && (
                 <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-rose-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-xs uppercase tracking-widest z-50 animate-bounce-subtle flex items-center gap-2">
                     <LockClosedIcon className="w-4 h-4" />
@@ -296,7 +265,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                 </div>
             )}
             
-            {/* Footer Actions */}
             {selectedOption && (
                 <footer className="p-5 bg-[var(--q-surface)] border-t border-[var(--q-border)] shrink-0 z-20 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(0,0,0,0.3)]">
                     <ReadingContainer mode={settings.readerMode} className="!px-0">
@@ -340,7 +308,6 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
                 </footer>
             )}
 
-            {/* DELETE CONFIRMATION MODAL */}
             <ConfirmationModal 
                 isOpen={isDeleteConfirmOpen} 
                 onClose={() => setIsDeleteConfirmOpen(false)} 
