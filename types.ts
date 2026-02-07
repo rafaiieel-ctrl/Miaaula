@@ -940,4 +940,21 @@ export interface SystemLog {
     message: string;
     details?: string;
 }
-    
+
+// --- NEW SESSION ENGINE TYPES ---
+export type SessionPhase = 'NEW' | 'REINFORCE';
+export type NextQuestionStatus = 'READY' | 'WAITING' | 'EMPTY';
+
+export interface SessionEngineState {
+    phase: SessionPhase;
+    newQueue: string[]; // IDs
+    reinforceQueue: string[]; // IDs
+    penaltyBox: { id: string; availableAt: number }[]; // Waiting list (10 mins)
+    answeredInSession: Set<string>; // IDs handled in this session
+    stats: {
+        correct: number;
+        wrong: number;
+        newCompleted: number;
+        reinforceCount: number;
+    };
+}
