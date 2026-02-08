@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Question, TrapscanEntry, TrapscanSessionConfig } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
@@ -88,21 +89,22 @@ const QuestionRunner: React.FC<QuestionRunnerProps> = ({
         );
     }
     
-    // CORRECTION HERE: Explicit type annotation to satisfy TS2345/TS2322
+    // CORRECTION HERE: Explicit type annotation and 'as const' assertions to satisfy TS2345/TS2322
     const activeConfig: TrapscanSessionConfig = useMemo(() => {
         if (sessionConfig) {
             return sessionConfig;
         }
         
-        // Define default object with explicit type so 'TREINO' is treated as TrapscanMode, not string
-        const defaults: TrapscanSessionConfig = { 
+        // Define default object with explicit type literal assertions
+        const defaults = { 
             enabled: true, 
             assistMode: true, 
-            defaultMode: 'TREINO', 
-            lockLevel: 'SOFT' 
+            defaultMode: 'TREINO' as const, 
+            lockLevel: 'SOFT' as const
         };
 
-        return settings.trapscan || defaults;
+        // Ensure settings.trapscan matches the type if it exists, otherwise fallback
+        return (settings.trapscan as TrapscanSessionConfig) || defaults;
     }, [sessionConfig, settings.trapscan]);
 
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
