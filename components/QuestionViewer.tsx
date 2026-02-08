@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Question, EvidenceItem } from '../types';
 import { CheckCircleIcon, XCircleIcon, LockClosedIcon, TrashIcon } from './icons';
 import QuestionExplanationBlocks from './QuestionExplanationBlocks';
@@ -53,10 +53,18 @@ const QuestionViewer: React.FC<QuestionViewerProps> = ({
             onOptionSelect(key);
         }
     };
+
+    // Detect if this should be rendered as a Gap/Cloze question
+    const isGapMode = useMemo(() => {
+        if (question.isGapType) return true;
+        const text = question.questionText || '';
+        // Check for {{...}} or triple underscore patterns
+        return /\{\{.+?\}\}|_{3,}/.test(text);
+    }, [question]);
     
     const renderQuestionText = () => {
-        // P3 Highlight (Legacy)
-        if (highlightText && question.questionText.includes(highlightText)) {
+        // P3 Highlight (Legacy) - Only applies if NOT in gap mode to avoid conflict
+        if (!isGapMode && highlightText && question.questionText.includes(highlightText)) {
             const parts = question.questionText.split(highlightText);
             return (
                 <span>
@@ -74,8 +82,15 @@ const QuestionViewer: React.FC<QuestionViewerProps> = ({
             );
         }
         
-        // Evidence Overlay (New)
-        return <PromptText text={question.questionText} highlights={evidence?.stem} />;
+        // Evidence Overlay (New) or Gap Mode
+        return (
+            <PromptText 
+                text={question.questionText} 
+                mode={isGapMode ? 'gap' : 'plain'}
+                revealExpected={isRevealed}
+                highlights={evidence?.stem} 
+            />
+        );
     };
 
     return (
