@@ -162,6 +162,21 @@ const processLeiSecaImport = (
             details.push({ entityType: 'pair', ref: litRef, action: 'ERROR', reasonCode: 'MIN_COUNT_FAIL', message: `Mínimo 6 pares exigido. Encontrado: ${lessonPairs.length}.` });
             errorCount++;
         }
+        
+        // Mapping Gaps to Card Structure (Crucial Fix for Gaps)
+        const mappedGaps = lessonGaps.map(g => ({
+             id: g.id,
+             text: g.payload.lacuna_text || g.payload.text,
+             correct: g.payload.correct_letter || g.payload.correct || 'A',
+             options: g.payload.options || { A: 'Erro' },
+             questionRef: `GAP-${g.payload.idx || '?'}`
+        }));
+        
+        // Update the card in staging with the mapped gaps
+        const cardIndex = staging.cards.findIndex(c => c.id === card.id);
+        if (cardIndex !== -1) {
+             staging.cards[cardIndex].extraGaps = mappedGaps;
+        }
 
         // Mapping to LessonNode
         // Title = Tópico ou Artigo

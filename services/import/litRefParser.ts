@@ -272,9 +272,26 @@ export function parseLitRefText(text: string, settings: AppSettings, batchId: st
 
     const today = srs.todayISO();
 
+    const gaps = contents.filter(c => c.type === 'LACUNA').map(c => ({
+        id: c.id,
+        litRef: c.litRef,
+        type: 'LACUNA',
+        payload: c.payload
+    }));
+
     const cards: LiteralnessCard[] = nuclei.map(n => {
+        const cardId = n.id;
+        // Find gaps belonging to this card
+        const cardGaps = gaps.filter(g => srs.canonicalizeLitRef(g.litRef) === srs.canonicalizeLitRef(cardId)).map(g => ({
+             id: g.id,
+             text: g.payload.lacuna_text || g.payload.text,
+             correct: g.payload.correct_letter || g.payload.correct || 'A',
+             options: g.payload.options || { A: 'Erro' },
+             questionRef: `GAP-${g.payload.idx || '?'}`
+        }));
+
         const card: LiteralnessCard = {
-            id: n.id,
+            id: cardId,
             lawId: forceLawId && lawId ? lawId : (n.law_id || lawId || 'Geral'),
             article: n.article || n.id,
             topic: n.topic || 'Geral',
@@ -289,7 +306,7 @@ export function parseLitRefText(text: string, settings: AppSettings, batchId: st
             stability: settings.srsV2.S_default_days,
             batteryProgress: 0, progressionLevel: 0, userNotes: '',
             contentType: 'LAW_DRY', importBatchId: batchId,
-            extraGaps: [] 
+            extraGaps: cardGaps // POPULATE GAPS HERE
         };
         card.studyFlow = buildReadingSteps(card);
         return card;
@@ -364,14 +381,6 @@ export function parseLitRefText(text: string, settings: AppSettings, batchId: st
             pairMatchPlayed: false, comments: ''
         } as unknown as Flashcard;
     });
-
-    // CRITICAL FIX: Extract Gaps specifically for persistence
-    const gaps = contents.filter(c => c.type === 'LACUNA').map(c => ({
-        id: c.id,
-        litRef: c.litRef,
-        type: 'LACUNA',
-        payload: c.payload
-    }));
 
     return {
         batchId, cards, questions, flashcards, gaps,
